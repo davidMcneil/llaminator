@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>llaminator</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #2196F3;
+        }
+
+        .logo {
+            display: block;
+            margin: 0 auto 10px;
+            max-width: 200px;
+            height: auto;
+        }
+
+        .slogan {
+            text-align: center;
+            font-size: 14px;
+            color: #90CAF9;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .status.running {
+            background: #2196F3;
+        }
+
+        .status.stopped {
+            background: #666;
+        }
+
+        .status.completed {
+            background: #ff9800;
+        }
+
+        .command-display {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            text-align: center;
+            border: 2px solid #2196F3;
+        }
+
+        .command-text {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 20px;
+            min-height: 40px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            color: #2196F3;
+            font-weight: bold;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        button:hover {
+            background: #1976D2;
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        button.stop {
+            background: #f44336;
+        }
+
+        button.stop:hover {
+            background: #d32f2f;
+        }
+
+        .video-container {
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        #video {
+            width: 100%;
+            display: block;
+        }
+
+        .error {
+            background: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <img src="/static/logo.png" alt="llaminator" class="logo">
+        <h1>llaminator</h1>
+        <div class="slogan">airtight. spitt'en good. portmanteau powered. robotics!</div>
+
+        <div id="status" class="status stopped">Stopped</div>
+
+        <div class="error" id="error"></div>
+
+        <div class="command-display">
+            <div id="command" class="command-text">Waiting...</div>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-label">Queue</div>
+                    <div class="stat-value" id="queueSize">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Last FPS</div>
+                    <div class="stat-value" id="lastFps">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Avg FPS</div>
+                    <div class="stat-value" id="avgFps">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Last Time</div>
+                    <div class="stat-value" id="lastTime">0s</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Avg Time</div>
+                    <div class="stat-value" id="avgTime">0s</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Frames</div>
+                    <div class="stat-value" id="totalFrames">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" onclick="start()">Start</button>
+            <button id="stopBtn" onclick="stop()" disabled class="stop">Stop</button>
+        </div>
+
+        <div class="video-container">
+            <video id="video" autoplay playsinline></video>
+        </div>
+    </div>
+
+    <script>
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            upgrade: true,
+            rememberUpgrade: true
+        });
+        const video = document.getElementById('video');
+        const commandEl = document.getElementById('command');
+        const statusEl = document.getElementById('status');
+        const errorEl = document.getElementById('error');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const queueSizeEl = document.getElementById('queueSize');
+        const lastFpsEl = document.getElementById('lastFps');
+        const avgFpsEl = document.getElementById('avgFps');
+        const lastTimeEl = document.getElementById('lastTime');
+        const avgTimeEl = document.getElementById('avgTime');
+        const totalFramesEl = document.getElementById('totalFrames');
+
+        let stream = null;
+        let isStreaming = false;
+        let canvas = null;
+        let ctx = null;
+        let currentUtterance = null;
+        let running = false;
+
+        // Initialize canvas
+        canvas = document.createElement('canvas');
+        ctx = canvas.getContext('2d');
+
+        // Socket events
+        socket.on('connect', () => {
+            console.log('Connected to server, socket id:', socket.id);
+            console.log('Socket connected status:', socket.connected);
+            startVideo();
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected');
+            statusEl.textContent = 'Disconnected';
+            statusEl.className = 'status stopped';
+        });
+
+        socket.on('state', (data) => {
+            running = data.running;
+
+            // Update status
+            if (data.completed) {
+                statusEl.textContent = 'Completed! 🎉';
+                statusEl.className = 'status completed';
+                startBtn.disabled = true;
+                stopBtn.disabled = true;
+            } else if (data.running) {
+                statusEl.textContent = 'Running';
+                statusEl.className = 'status running';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                statusEl.textContent = 'Stopped';
+                statusEl.className = 'status stopped';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+
+            // Update command
+            if (data.command) {
+                commandEl.textContent = data.command;
+                // Read command aloud when running
+                if (data.running && data.command !== 'Waiting...') {
+                    readCommand(data.command);
+                }
+            }
+
+            // Update stats
+            queueSizeEl.textContent = data.queue_size || 0;
+            lastFpsEl.textContent = (data.last_fps || 0).toFixed(2);
+            avgFpsEl.textContent = (data.average_fps || 0).toFixed(2);
+            lastTimeEl.textContent = (data.last_time || 0).toFixed(3) + 's';
+            avgTimeEl.textContent = (data.avg_time || 0).toFixed(3) + 's';
+            totalFramesEl.textContent = data.total_frames || 0;
+        });
+
+        socket.on('error', (data) => {
+            errorEl.textContent = data.message;
+            errorEl.style.display = 'block';
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 5000);
+        });
+
+        function start() {
+            console.log('Start button clicked, emitting start event');
+            console.log('Socket connected:', socket.connected);
+            console.log('Socket id:', socket.id);
+            socket.emit('start', (response) => {
+                console.log('Start event acknowledged:', response);
+            });
+        }
+
+        function stop() {
+            socket.emit('stop');
+            if (currentUtterance) {
+                window.speechSynthesis.cancel();
+                currentUtterance = null;
+            }
+        }
+
+        async function startVideo() {
+            if (isStreaming) return;
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'environment'
+                    }
+                });
+
+                video.srcObject = stream;
+                await video.play();
+                isStreaming = true;
+                captureFrames();
+            } catch (err) {
+                console.error('Camera error:', err);
+                showError(`Camera error: ${err.message}`);
+            }
+        }
+
+        function captureFrames() {
+            if (!isStreaming) return;
+
+            if (!video.videoWidth || !video.videoHeight) {
+                setTimeout(captureFrames, 100);
+                return;
+            }
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            const imageData = canvas.toDataURL('image/jpeg', 0.85);
+            socket.emit('frame', { image: imageData });
+
+            setTimeout(captureFrames, 500); // 2 FPS
+        }
+
+        function readCommand(text) {
+            if (!('speechSynthesis' in window)) return;
+
+            if (currentUtterance) {
+                window.speechSynthesis.cancel();
+            }
+
+            currentUtterance = new SpeechSynthesisUtterance(text);
+            currentUtterance.rate = 0.9;
+            currentUtterance.volume = 1.0;
+
+            const voices = window.speechSynthesis.getVoices();
+            const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+            if (englishVoices.length > 0) {
+                currentUtterance.voice = englishVoices[0];
+            }
+
+            currentUtterance.onend = () => currentUtterance = null;
+            currentUtterance.onerror = () => currentUtterance = null;
+
+            window.speechSynthesis.speak(currentUtterance);
+        }
+
+        function showError(message) {
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+        }
+
+        // Cleanup
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            if (currentUtterance) {
+                window.speechSynthesis.cancel();
+            }
+            socket.disconnect();
+        });
+    </script>
+</body>
+
+</html>
