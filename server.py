@@ -323,14 +323,11 @@ if __name__ == '__main__':
     key_file = os.path.join(os.path.dirname(__file__), 'key.pem')
     
     print("="*70)
-    print("ROBOT GAME SERVER")
+    print("llaminator - airtight. spitt'en good. portmanteau powered. robotics!")
     print("="*70)
     print(f"Model: {MODEL}")
-    print(f"Objective: {OBJECTIVE}")
-    if POSSIBLE_COMMANDS:
-        print(f"Available Commands: {len(POSSIBLE_COMMANDS)}")
-    else:
-        print("Available Commands: None (LLM generates commands freely)")
+    print(f"System Prompt: {SYSTEM_PROMPT}")
+    print(f"User Prompt: {USER_PROMPT}")
     
     print("Server starting on https://0.0.0.0:5001")
     print("⚠️  Using self-signed certificate - browser will show security warning")
@@ -340,6 +337,4 @@ if __name__ == '__main__':
     ssl_context.verify_mode = ssl.CERT_NONE
     socketio.run(app, host='0.0.0.0', port=5001, debug=True, 
                 allow_unsafe_werkzeug=True, ssl_context=ssl_context)
-    
-    print("="*70)
 
