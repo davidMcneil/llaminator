@@ -22,19 +22,18 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
                     ping_timeout=60, ping_interval=25)
 
 # Configuration
-# MODEL = 'moondream:1.8b'
-MODEL = 'gemma3:4b'
-OBJECTIVE = "grab a red bal"
-POSSIBLE_COMMANDS = ["forward", "turn left", "turn right", "grab", "objective complete"] # For now let the LLM come up with any command it wants
+MODEL = 'moondream:1.8b'
+# MODEL = 'gemma3:4b'
+OBJECTIVE = "grab a red ball"
+POSSIBLE_COMMANDS = ["forward", "turn left", "turn right", "grab", "objective complete"]
 SYSTEM_PROMPT = f"""You are guiding a human to complete an objective.
 Objective: {OBJECTIVE}
 Possible commands: {', '.join(POSSIBLE_COMMANDS) if POSSIBLE_COMMANDS else 'any command'}
 Do not reply with anything other than a possible command.
 If the objective appears to be completed, respond with "objective complete"."""
-USER_PROMPT = "what is the best next command?"
-# USER_PROMPT = "If the image contains a red ball, respond with 'objective complete'. Otherwise describe the image."
-# USER_PROMPT = "reply with 'objective complete'"
-# USER_PROMPT = "if the image contains a red ball, respond with 'objective complete'. Otherwise reply with 'ball missing'."
+# For now no system prompt just describe the image
+SYSTEM_PROMPT = None
+USER_PROMPT = "describe the image"
 
 # Game state
 state_lock = threading.Lock()

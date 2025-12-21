@@ -5,6 +5,10 @@ set -e
 echo "Installing ollama..."
 curl -fsSL https://ollama.com/install.sh | sh
 
+echo "Downloading ollama models..."
+ollama pull moondream:1.8b
+ollama pull gemma3:4b
+
 echo "Setting up Python virtual environment..."
 python3 -m venv venv
 

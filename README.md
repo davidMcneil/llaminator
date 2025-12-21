@@ -9,3 +9,5 @@ airtight. spitt'en good. portmanteau powered. robotics!
 
 ## Run
 > ./run.sh
+
+Open [https://<ip>:5001](https://<ip>:5001) on device with camera.
