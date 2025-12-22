@@ -27,9 +27,10 @@ socketio = SocketIO(
 )
 
 # Configuration
+# MODEL = "gemma3:4b"
 MODEL = "moondream:1.8b"
-# MODEL = 'gemma3:4b'
 SYSTEM_PROMPT = None
+# USER_PROMPT = "if image contains a person respond with 'objective complete' otherwise reply with 'move'. Only reply with 'objective complete' or 'move'"
 USER_PROMPT = "describe the image"
 # the number of pixels to resize the image to before sending to the LLM
 TARGET_PIXELS = None
@@ -49,7 +50,7 @@ initial_state = SimpleNamespace(
     # The current command the server is giving to the client to display and read.
     command=None,
     # A last in first out queue of frames to process. Set it to a size of 2 for now.
-    frames=queue.LifoQueue(maxsize=2),  # LIFO queue (stack) with max size 2
+    frames=queue.LifoQueue(maxsize=1),  # LIFO queue (stack) with max size 2
     # The number of frames processed by the server.
     total_frames=0,
     # The total time spent processing frames by the server. This is used to calculate the FPS.
@@ -62,7 +63,7 @@ state = SimpleNamespace(
     client_id=initial_state.client_id,
     completed=initial_state.completed,
     command=initial_state.command,
-    frames=queue.LifoQueue(maxsize=2),
+    frames=queue.LifoQueue(maxsize=1),
     total_frames=initial_state.total_frames,
     total_processing_time=initial_state.total_processing_time,
     last_processing_time=initial_state.last_processing_time,
@@ -71,7 +72,7 @@ state = SimpleNamespace(
 
 def reset_state():
     """Reset state to initial values and create a new empty frames queue"""
-    state.frames = queue.LifoQueue(maxsize=2)
+    state.frames = queue.LifoQueue(maxsize=1)
     state.running = initial_state.running
     state.completed = initial_state.completed
     state.command = initial_state.command
@@ -149,10 +150,10 @@ def process_frame_and_get_command(frame_data):
         # Save to temporary file
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
             temp_image_path = tmp_file.name
+
             # Resize for faster processing while maintaining aspect ratio
             height, width = img.shape[:2]
             current_pixels = width * height
-
             if TARGET_PIXELS is not None and current_pixels > TARGET_PIXELS:
                 # Calculate scale factor to reach target pixel count
                 scale_factor = (TARGET_PIXELS / current_pixels) ** 0.5

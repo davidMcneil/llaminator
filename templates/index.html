@@ -205,8 +205,17 @@
         </div>
 
         <div class="controls">
+            <div style="margin-bottom: 15px;">
+                <input type="radio" id="streamingMode" name="mode" value="streaming" checked onchange="changeMode()">
+                <label for="streamingMode">Streaming</label>
+                <input type="radio" id="captureMode" name="mode" value="capture" onchange="changeMode()"
+                    style="margin-left: 15px;">
+                <label for="captureMode">Capture</label>
+            </div>
             <button id="startBtn" onclick="start()">Start</button>
             <button id="stopBtn" onclick="stop()" disabled class="stop">Stop</button>
+            <button id="captureBtn" onclick="captureFrame()" disabled style="display: none;">Capture</button>
+            <button id="muteBtn" onclick="toggleMute()">🔊 Mute</button>
         </div>
 
         <div class="video-container">
@@ -226,6 +235,10 @@
         const errorEl = document.getElementById('error');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const muteBtn = document.getElementById('muteBtn');
+        const streamingModeRadio = document.getElementById('streamingMode');
+        const captureModeRadio = document.getElementById('captureMode');
         const queueSizeEl = document.getElementById('queueSize');
         const lastFpsEl = document.getElementById('lastFps');
         const avgFpsEl = document.getElementById('avgFps');
@@ -239,6 +252,9 @@
         let ctx = null;
         let currentUtterance = null;
         let running = false;
+        let captureMode = false;
+        let captureInterval = null;
+        let isMuted = false;
 
         // Initialize canvas
         canvas = document.createElement('canvas');
@@ -261,28 +277,39 @@
             running = data.running;
 
             // Update status
-            if (data.completed) {
+            if (data.completed && data.running) {
                 statusEl.textContent = 'Completed! 🎉';
                 statusEl.className = 'status completed';
                 startBtn.disabled = true;
+                stopBtn.disabled = true;
+            } else if (data.completed && !data.running) {
+                statusEl.textContent = 'Completed! 🎉';
+                statusEl.className = 'status completed';
+                startBtn.disabled = false;  // Allow restarting
                 stopBtn.disabled = true;
             } else if (data.running) {
                 statusEl.textContent = 'Running';
                 statusEl.className = 'status running';
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
+                captureBtn.disabled = false;
+                // Start streaming if in streaming mode
+                if (!captureMode && isStreaming) {
+                    captureFrames();
+                }
             } else {
                 statusEl.textContent = 'Stopped';
                 statusEl.className = 'status stopped';
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
+                captureBtn.disabled = true;
             }
 
             // Update command
             if (data.command) {
                 commandEl.textContent = data.command;
-                // Read command aloud when running
-                if (data.running && data.command !== 'Waiting...') {
+                // Read command aloud when running, or when objective is complete
+                if (data.command !== 'Waiting...' && (data.running || data.command === 'objective complete')) {
                     readCommand(data.command);
                 }
             }
@@ -319,6 +346,11 @@
                 window.speechSynthesis.cancel();
                 currentUtterance = null;
             }
+            // Clear any ongoing frame capture
+            if (captureInterval) {
+                clearTimeout(captureInterval);
+                captureInterval = null;
+            }
         }
 
         async function startVideo() {
@@ -336,18 +368,67 @@
                 video.srcObject = stream;
                 await video.play();
                 isStreaming = true;
-                captureFrames();
+                // Only start streaming if in streaming mode
+                if (!captureMode && running) {
+                    captureFrames();
+                }
             } catch (err) {
                 console.error('Camera error:', err);
                 showError(`Camera error: ${err.message}`);
             }
         }
 
-        function captureFrames() {
-            if (!isStreaming) return;
+        function changeMode() {
+            captureMode = captureModeRadio.checked;
+
+            // Always stop streaming first
+            if (captureInterval) {
+                clearTimeout(captureInterval);
+                captureInterval = null;
+            }
+
+            // Update UI
+            if (captureMode) {
+                captureBtn.style.display = 'inline-block';
+            } else {
+                captureBtn.style.display = 'none';
+            }
+
+            // If running, restart frame capture based on mode
+            if (running) {
+                if (!captureMode) {
+                    // Start streaming
+                    captureFrames();
+                }
+                // If capture mode, streaming is already stopped above
+            }
+        }
+
+        function captureFrame() {
+            if (!isStreaming || !running) return;
 
             if (!video.videoWidth || !video.videoHeight) {
-                setTimeout(captureFrames, 100);
+                return;
+            }
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            const imageData = canvas.toDataURL('image/jpeg', 0.85);
+            socket.emit('frame', { image: imageData });
+        }
+
+        function captureFrames() {
+            if (!isStreaming || !running) return;
+
+            // Only stream in streaming mode
+            if (captureMode) {
+                return;
+            }
+
+            if (!video.videoWidth || !video.videoHeight) {
+                captureInterval = setTimeout(captureFrames, 100);
                 return;
             }
 
@@ -358,18 +439,32 @@
             const imageData = canvas.toDataURL('image/jpeg', 0.85);
             socket.emit('frame', { image: imageData });
 
-            setTimeout(captureFrames, 500); // 2 FPS
+            captureInterval = setTimeout(captureFrames, 500); // 2 FPS
+        }
+
+        function toggleMute() {
+            // Always stop any current reading when button is clicked
+            window.speechSynthesis.cancel();
+            currentUtterance = null;
+
+            isMuted = !isMuted;
+            if (isMuted) {
+                muteBtn.textContent = '🔇 Unmute';
+            } else {
+                muteBtn.textContent = '🔊 Mute';
+            }
         }
 
         function readCommand(text) {
             if (!('speechSynthesis' in window)) return;
+            if (isMuted) return;
 
             if (currentUtterance) {
                 window.speechSynthesis.cancel();
             }
 
             currentUtterance = new SpeechSynthesisUtterance(text);
-            currentUtterance.rate = 0.9;
+            currentUtterance.rate = 1.5;
             currentUtterance.volume = 1.0;
 
             const voices = window.speechSynthesis.getVoices();
