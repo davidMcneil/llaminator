@@ -29,16 +29,10 @@ socketio = SocketIO(
 # Configuration
 MODEL = "moondream:1.8b"
 # MODEL = 'gemma3:4b'
-OBJECTIVE = "grab a red ball"
-POSSIBLE_COMMANDS = ["forward", "turn left", "turn right", "grab", "objective complete"]
-SYSTEM_PROMPT = f"""You are guiding a human to complete an objective.
-Objective: {OBJECTIVE}
-Possible commands: {', '.join(POSSIBLE_COMMANDS) if POSSIBLE_COMMANDS else 'any command'}
-Do not reply with anything other than a possible command.
-If the objective appears to be completed, respond with "objective complete"."""
-# For now no system prompt just describe the image
 SYSTEM_PROMPT = None
 USER_PROMPT = "describe the image"
+# the number of pixels to resize the image to before sending to the LLM
+TARGET_PIXELS = None
 
 # Game state
 state_lock = threading.Lock()
@@ -155,8 +149,20 @@ def process_frame_and_get_command(frame_data):
         # Save to temporary file
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_file:
             temp_image_path = tmp_file.name
-            # Resize for faster processing
-            resized_img = cv2.resize(img, (320, 240), interpolation=cv2.INTER_AREA)
+            # Resize for faster processing while maintaining aspect ratio
+            height, width = img.shape[:2]
+            current_pixels = width * height
+
+            if TARGET_PIXELS is not None and current_pixels > TARGET_PIXELS:
+                # Calculate scale factor to reach target pixel count
+                scale_factor = (TARGET_PIXELS / current_pixels) ** 0.5
+                new_width = int(width * scale_factor)
+                new_height = int(height * scale_factor)
+                resized_img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+                print(f"resized image from {width}x{height} to {new_width}x{new_height}")
+            else:
+                resized_img = img
+
             cv2.imwrite(temp_image_path, resized_img, [cv2.IMWRITE_JPEG_QUALITY, 85])
 
         try:
@@ -170,7 +176,6 @@ def process_frame_and_get_command(frame_data):
             )
             end_time = time.time()
             processing_time = end_time - start_time
-            # print(response)
 
             # Update processing stats
             with state_lock:
