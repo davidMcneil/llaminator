@@ -2,8 +2,13 @@
 
 set -e
 
-echo "Installing ollama..."
-curl -fsSL https://ollama.com/install.sh | sh
+echo "Checking for ollama..."
+if command -v ollama >/dev/null 2>&1; then
+    echo "ollama is already installed, skipping installation"
+else
+    echo "Installing ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh
+fi
 
 echo "Downloading ollama models..."
 ollama pull moondream:1.8b
@@ -18,14 +23,7 @@ echo "Installing Python dependencies..."
 
 echo "Generating SSL certificates for HTTPS..."
 if [ ! -f cert.pem ] || [ ! -f key.pem ]; then
-    openssl req -x509 -newkey rsa:4096 -nodes \
-        -keyout key.pem \
-        -out cert.pem \
-        -days 365 \
-        -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
-    chmod 600 key.pem
-    chmod 644 cert.pem
-    echo "Self-signed certificate generated (for testing only - browsers will show security warning)"
+    ./venv/bin/python3 certs.py
 else
     echo "SSL certificates already exist, skipping generation"
 fi
