@@ -28,6 +28,7 @@ socketio = SocketIO(
 
 # Configuration
 # MODEL = "gemma3:4b"
+# MODEL = "qwen3-vl:2b"
 MODEL = "moondream:1.8b"
 SYSTEM_PROMPT = None
 # USER_PROMPT = "if image contains a person respond with 'objective complete' otherwise reply with 'move'. Only reply with 'objective complete' or 'move'"
@@ -318,7 +319,7 @@ def handle_stop():
 def handle_frame(data):
     """Handle incoming frame from client - push to LIFO queue"""
     client_session_id = flask_request.sid
-    # print(f"frame received from: {client_session_id}")
+    print(f"frame received from: {client_session_id}")
 
     frame_data = data.get("image")
     if not frame_data:

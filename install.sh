@@ -13,6 +13,7 @@ fi
 echo "Downloading ollama models..."
 ollama pull moondream:1.8b
 ollama pull gemma3:4b
+ollama pull qwen3-vl:2b
 
 echo "Setting up Python virtual environment..."
 python3 -m venv venv
